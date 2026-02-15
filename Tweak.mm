@@ -11,7 +11,7 @@ const uint32_t RET_HEX = 0xD65F03C0;
 
 static bool is_patched_done = false;
 
-// 2. مصفوفة NOP (كاملة ونظيفة)
+[span_0](start_span)// 2. مصفوفة NOP (كاملة ونظيفة) [cite: 1-16]
 uintptr_t nop_offsets[] = {
     0x00004380, 0x00104D2C, 0x00104DBC, 0x00104DC8, 0x00104DD4, 0x00104E9C, 0x001050F8, 0x0010AEF0, 
     0x0010AF0C, 0x0010AF18, 0x0010B438, 0x0010B448, 0x0010C3B4, 0x0010C6A0, 0x0010DB68, 0x0010DE50, 
@@ -114,51 +114,64 @@ uintptr_t nop_offsets[] = {
     0x00233AC8, 0x00235FF4, 0x00236330, 0x00239184, 0x002393B0, 0x00239414
 };
 
-// 3. مصفوفة RET الحساسة
+[cite_start]// مصفوفة RET (3 أوفستات)[span_0](end_span)
 uintptr_t ret_offsets[] = {
     0x000CC0FC, 0x000D22EC, 0x000ECE88
 };
 
-// 4. نظام عرض التنبيه الآمن (يتكرر حتى تظهر واجهة اللعبة)
-void ShowPowerAlert() {
+// 3. نظام عرض الرسالة (تم استبدال keyWindow بالطريقة المتوافقة مع iOS 13+)
+void ShowSuccessAlert() {
     dispatch_async(dispatch_get_main_queue(), ^{
-        UIWindow *window = [UIApplication sharedApplication].keyWindow;
+        UIWindow *window = nil;
+        // البحث عن النافذة النشطة (Active Window) بشكل صحيح
+        if (@available(iOS 13.0, *)) {
+            for (UIWindowScene* scene in [UIApplication sharedApplication].connectedScenes) {
+                if (scene.activationState == UISceneActivationStateForegroundActive) {
+                    window = scene.windows.firstObject;
+                    break;
+                }
+            }
+        }
+        
+        // إذا لم نجدها، نستخدم النسخة الاحتياطية (للتوافق القديم)
+        if (!window) window = [UIApplication sharedApplication].windows.firstObject;
+
         if (window && window.rootViewController) {
             UIViewController *top = window.rootViewController;
             while (top.presentedViewController) top = top.presentedViewController;
             
             UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Power Hook" 
-                                                                           message:@"Anogs Target Found! ✅\nAll patches applied in background." 
+                                                                           message:@"Anogs Bypass: Active ✅\n705 Offsets Applied in Background." 
                                                                     preferredStyle:UIAlertControllerStyleAlert];
             [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
             [top presentViewController:alert animated:YES completion:nil];
         } else {
-            // انتظار ثانية أخرى إذا لم تكن الواجهة جاهزة
+            // إعادة المحاولة بعد ثانية إذا لم تكن الواجهة جاهزة تماماً
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                ShowPowerAlert();
+                ShowSuccessAlert();
             });
         }
     });
 }
 
-// 5. محرك الحقن المتدرج المحصن (Power Engine)
-void StartPowerEngine(intptr_t slide) {
+// 4. المحرك القوي للحقن (Power Engine)
+void PowerPatchEngine(intptr_t slide) {
     if (is_patched_done) return;
     is_patched_done = true;
 
     size_t nop_count = sizeof(nop_offsets) / sizeof(nop_offsets[0]);
     size_t ret_count = sizeof(ret_offsets) / sizeof(ret_offsets[0]);
 
-    // تشغيل في خيط خلفي لمنع تجميد اللعبة (SIGKILL Prevention)
+    // تشغيل الحقن في خيط خلفي (Background Thread) لمنع تجميد اللعبة والكراش (SIGKILL)
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
         
-        // حقن NOP بدفعات 50 كل ثانيتين لضمان استقرار الذاكرة
+        // حقن NOP بدفعات 50 كل ثانيتين لضمان استقرار المعالج
         for (size_t i = 0; i < nop_count; i++) {
             void* addr = (void*)(slide + nop_offsets[i]);
             if (addr) DobbyCodePatch(addr, (uint8_t *)&NOP_HEX, 4);
             
             if ((i + 1) % 50 == 0) {
-                sleep(2); // راحة للمعالج والنظام
+                sleep(2); 
             }
         }
 
@@ -168,26 +181,26 @@ void StartPowerEngine(intptr_t slide) {
             if (addr) DobbyCodePatch(addr, (uint8_t *)&RET_HEX, 4);
         }
 
-        // إظهار رسالة النجاح
-        ShowPowerAlert();
+        // إظهار الرسالة النهائية
+        ShowSuccessAlert();
     });
 }
 
-// 6. المراقب الذكي (يستهدف ملف anogs)
+// 5. المراقب الذكي لملف anogs
 void on_image_added(const struct mach_header *mh, intptr_t slide) {
     for (uint32_t i = 0; i < _dyld_image_count(); i++) {
         if (_dyld_get_image_header(i) == mh) {
             const char *name = _dyld_get_image_name(i);
             // استهداف ملف anogs بدقة
             if (name && strstr(name, "anogs")) {
-                StartPowerEngine(slide);
+                PowerPatchEngine(slide);
             }
             break;
         }
     }
 }
 
-// 7. البداية
+// 6. نقطة الانطلاق
 __attribute__((constructor))
 static void init() {
     _dyld_register_func_for_add_image(on_image_added);
