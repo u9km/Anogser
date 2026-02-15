@@ -2,13 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>Filter</key>
-    <dict>
-        <key>Bundles</key>
-        <array>
-            <string>com.tencent.ig</string>
-        </array>
-    </dict>
+    <key>get-task-allow</key>
+    <true/>
+    <key>com.apple.private.security.no-container</key>
+    <true/>
 </dict>
 </plist>
-
