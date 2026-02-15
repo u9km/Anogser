@@ -6,8 +6,8 @@ include $(THEOS)/makefiles/common.mk
 TWEAK_NAME = PUBG_Patcher
 PUBG_Patcher_FILES = Tweak.mm
 PUBG_Patcher_CFLAGS = -fobjc-arc
-PUBG_Patcher_LDFLAGS = -L. -ldobby -dynamiclib
-# ربط ملف الصلاحيات
+# لا حاجة لـ Dobby الآن، المحرك مدمج في الكود
+PUBG_Patcher_LDFLAGS = -dynamiclib
 PUBG_Patcher_CODESIGN_FLAGS = -SEntitlements.plist
 
 include $(THEOS_MAKE_PATH)/tweak.mk
