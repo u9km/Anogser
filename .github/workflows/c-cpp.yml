@@ -1,4 +1,4 @@
-name: Build Anogs Patcher V4 Fix
+name: Build Anogs Patcher Final Fix
 
 on:
   push:
@@ -17,32 +17,30 @@ jobs:
         with:
           submodules: recursive
 
-      # 2. إعداد Theos (الطريقة اليدوية المضمونة)
-      # تم استبدال curl بـ git clone لتجنب خطأ api.github.com
+      # 2. إعداد Theos (بدون سكربت التثبيت لتجنب مشاكل API)
       - name: Setup Theos
         run: |
           git clone --recursive https://github.com/theos/theos.git $HOME/theos
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
 
-      # 3. تحميل SDKs
+      # 3. تحميل SDKs (مع حذف المجلد القديم أولاً لحل مشكلة exit code 128)
       - name: Download iOS SDK
         run: |
+          rm -rf $HOME/theos/sdks
           git clone --quiet --depth=1 https://github.com/theos/sdks.git $HOME/theos/sdks
           echo "SDKs Downloaded Successfully."
 
-      # 4. التحقق من وجود مكتبة Dobby
+      # 4. التحقق من ملفات Dobby (تأكد أنك رفعت libdobby.a و dobby.h)
       - name: Verify Dobby Library
         run: |
           if [ ! -f ./libdobby.a ]; then
-            echo "❌ Error: 'libdobby.a' is missing!"
-            echo "Please upload libdobby.a to your repository root."
+            echo "❌ Error: 'libdobby.a' is missing! Upload it to your repo."
             exit 1
           fi
           if [ ! -f ./dobby.h ]; then
             echo "❌ Error: 'dobby.h' is missing!"
             exit 1
           fi
-          echo "✅ Dobby library found."
 
       # 5. البناء
       - name: Compile Tweak
