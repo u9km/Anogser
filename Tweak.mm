@@ -2,14 +2,14 @@
 #import <UIKit/UIKit.h>
 #include <mach-o/dyld.h>
 #include <string.h>
-#include <unistd.h> // ضروري لدالة sleep
+#include <unistd.h> 
 #include "dobby.h"
 
-// 1. تعريف الأوامر
+// 1. تعريف أوامر الباتش
 const uint32_t NOP_HEX = 0xD503201F; 
 const uint32_t RET_HEX = 0xD65F03C0; 
 
-// 2. مصفوفة NOP
+// 2. مصفوفة NOP (702 أوفست)
 uintptr_t nop_offsets[] = {
     0x00004380, 0x00104D2C, 0x00104DBC, 0x00104DC8, 0x00104DD4, 0x00104E9C, 0x001050F8, 0x0010AEF0, 
     0x0010AF0C, 0x0010AF18, 0x0010B438, 0x0010B448, 0x0010C3B4, 0x0010C6A0, 0x0010DB68, 0x0010DE50, 
@@ -112,24 +112,23 @@ uintptr_t nop_offsets[] = {
     0x00233AC8, 0x00235FF4, 0x00236330, 0x00239184, 0x002393B0, 0x00239414
 };
 
-// 3. مصفوفة RET
+// 3. مصفوفة RET (3 أوفستات)
 uintptr_t ret_offsets[] = {
     0x000CC0FC, 0x000D22EC, 0x000ECE88
 };
 
-// 4. محرك الحقن المتدرج (50 أوفست كل ثانيتين)
+// 4. محرك الحقن المتدرج
 void ExecutePatch(intptr_t slide) {
     size_t nop_count = sizeof(nop_offsets) / sizeof(nop_offsets[0]);
     size_t ret_count = sizeof(ret_offsets) / sizeof(ret_offsets[0]);
 
-    // دفعات NOP
+    // دفعات NOP: 50 أوفست كل ثانيتين
     for (size_t i = 0; i < nop_count; i++) {
         void* addr = (void*)(slide + nop_offsets[i]);
         DobbyCodePatch(addr, (uint8_t *)&NOP_HEX, 4);
         
-        // ميزتك المطلوبة: كل 50 أوفست ننتظر ثانيتين
         if ((i + 1) % 50 == 0) {
-            NSLog(@"[AnogsBatch] Finished 50 NOPs. Waiting 2 seconds...");
+            NSLog(@"[BatchLog] Finished 50 offsets. Waiting 2 seconds...");
             sleep(2); 
         }
     }
@@ -139,24 +138,20 @@ void ExecutePatch(intptr_t slide) {
         void* addr = (void*)(slide + ret_offsets[i]);
         DobbyCodePatch(addr, (uint8_t *)&RET_HEX, 4);
     }
-    
-    NSLog(@"[AnogsBatch] All patches applied successfully.");
 }
 
-// 5. المراقب والمنبه
+// 5. المراقب الذكي
 void on_image_added(const struct mach_header *mh, intptr_t slide) {
     for (uint32_t i = 0; i < _dyld_image_count(); i++) {
         if (_dyld_get_image_header(i) == mh) {
             const char *name = _dyld_get_image_name(i);
             if (name && strstr(name, "anogs")) {
-                // تشغيل الحقن في "خلفية" (Thread) لعدم تجميد شاشة اللعبة أثناء الانتظار
                 dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
                     ExecutePatch(slide);
                     
-                    // إظهار تنبيه النجاح بعد الانتهاء بالكامل
                     dispatch_async(dispatch_get_main_queue(), ^{
                         UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"System" 
-                                                                                       message:@"Anogs Bypass: Full Active ✅" 
+                                                                                       message:@"Bypass: Full Active ✅" 
                                                                                 preferredStyle:UIAlertControllerStyleAlert];
                         [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
                         [[UIApplication sharedApplication].keyWindow.rootViewController presentViewController:alert animated:YES completion:nil];
