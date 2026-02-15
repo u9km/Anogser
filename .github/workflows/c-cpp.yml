@@ -1,0 +1,62 @@
+name: Build Anogs Patcher V4
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: # يتيح لك تشغيل البناء يدوياً من زر Actions
+
+jobs:
+  build:
+    name: Build iOS Tweak
+    runs-on: macos-latest
+
+    steps:
+      # 1. سحب الكود المصدري (Checkout V4)
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # 2. إعداد بيئة Theos (أداة بناء التويكات)
+      - name: Setup Theos
+        run: |
+          bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+
+      # 3. تحميل SDK الخاص بـ iOS (ضروري للبناء)
+      - name: Download iOS SDK
+        run: |
+          git clone --quiet --depth=1 https://github.com/theos/sdks.git $HOME/theos/sdks
+          echo "SDKs Downloaded Successfully."
+
+      # 4. التحقق من وجود مكتبة Dobby (مهم جداً)
+      - name: Verify Dobby Library
+        run: |
+          if [ ! -f ./libdobby.a ]; then
+            echo "❌ Error: 'libdobby.a' is missing!"
+            echo "Please upload libdobby.a to your repository root."
+            exit 1
+          fi
+          if [ ! -f ./dobby.h ]; then
+            echo "❌ Error: 'dobby.h' is missing!"
+            exit 1
+          fi
+          echo "✅ Dobby library found."
+
+      # 5. عملية البناء (Make Package)
+      - name: Compile Tweak
+        run: |
+          # تنظيف أي بناء سابق
+          make clean
+          # أمر البناء (تجاهل الأخطاء التحذيرية)
+          make package FINALPACKAGE=1 messages=yes
+
+      # 6. رفع الملف الناتج (Artifact V4)
+      - name: Upload Dylib
+        uses: actions/upload-artifact@v4
+        with:
+          name: Anogs_Patcher_Dylib
+          # مسار الملف الناتج من Theos
+          path: .theos/obj/debug/*.dylib
+          if-no-files-found: error
+          compression-level: 0 # أسرع رفع ممكن
