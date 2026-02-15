@@ -5,12 +5,13 @@
 #include <unistd.h> 
 #include "dobby.h"
 
+// 1. تعريف قيم الأوامر
 const uint32_t NOP_HEX = 0xD503201F; 
 const uint32_t RET_HEX = 0xD65F03C0; 
 
 static bool is_patched_done = false;
 
-// مصفوفة NOP نظيفة تماماً (702 أوفست)
+// 2. مصفوفة NOP (كاملة ونظيفة)
 uintptr_t nop_offsets[] = {
     0x00004380, 0x00104D2C, 0x00104DBC, 0x00104DC8, 0x00104DD4, 0x00104E9C, 0x001050F8, 0x0010AEF0, 
     0x0010AF0C, 0x0010AF18, 0x0010B438, 0x0010B448, 0x0010C3B4, 0x0010C6A0, 0x0010DB68, 0x0010DE50, 
@@ -113,13 +114,13 @@ uintptr_t nop_offsets[] = {
     0x00233AC8, 0x00235FF4, 0x00236330, 0x00239184, 0x002393B0, 0x00239414
 };
 
-// مصفوفة RET (3 أوفستات)
+// 3. مصفوفة RET الحساسة
 uintptr_t ret_offsets[] = {
     0x000CC0FC, 0x000D22EC, 0x000ECE88
 };
 
-// نظام عرض الرسالة الذكي
-void ShowBypassAlert() {
+// 4. نظام عرض التنبيه الآمن (يتكرر حتى تظهر واجهة اللعبة)
+void ShowPowerAlert() {
     dispatch_async(dispatch_get_main_queue(), ^{
         UIWindow *window = [UIApplication sharedApplication].keyWindow;
         if (window && window.rootViewController) {
@@ -127,19 +128,20 @@ void ShowBypassAlert() {
             while (top.presentedViewController) top = top.presentedViewController;
             
             UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Power Hook" 
-                                                                           message:@"Anogs Bypass Status: Success ✅\nAll 705 Offsets Applied Safely." 
+                                                                           message:@"Anogs Target Found! ✅\nAll patches applied in background." 
                                                                     preferredStyle:UIAlertControllerStyleAlert];
             [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
             [top presentViewController:alert animated:YES completion:nil];
         } else {
+            // انتظار ثانية أخرى إذا لم تكن الواجهة جاهزة
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                ShowBypassAlert();
+                ShowPowerAlert();
             });
         }
     });
 }
 
-// محرك الحقن المتدرج
+// 5. محرك الحقن المتدرج المحصن (Power Engine)
 void StartPowerEngine(intptr_t slide) {
     if (is_patched_done) return;
     is_patched_done = true;
@@ -147,32 +149,36 @@ void StartPowerEngine(intptr_t slide) {
     size_t nop_count = sizeof(nop_offsets) / sizeof(nop_offsets[0]);
     size_t ret_count = sizeof(ret_offsets) / sizeof(ret_offsets[0]);
 
+    // تشغيل في خيط خلفي لمنع تجميد اللعبة (SIGKILL Prevention)
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
-        // حقن NOP بدفعات 50 كل ثانيتين
+        
+        // حقن NOP بدفعات 50 كل ثانيتين لضمان استقرار الذاكرة
         for (size_t i = 0; i < nop_count; i++) {
             void* addr = (void*)(slide + nop_offsets[i]);
             if (addr) DobbyCodePatch(addr, (uint8_t *)&NOP_HEX, 4);
             
             if ((i + 1) % 50 == 0) {
-                sleep(2); 
+                sleep(2); // راحة للمعالج والنظام
             }
         }
 
-        // حقن RET
+        // حقن RET الحساسة
         for (size_t i = 0; i < ret_count; i++) {
             void* addr = (void*)(slide + ret_offsets[i]);
             if (addr) DobbyCodePatch(addr, (uint8_t *)&RET_HEX, 4);
         }
 
-        ShowBypassAlert();
+        // إظهار رسالة النجاح
+        ShowPowerAlert();
     });
 }
 
-// المراقب
+// 6. المراقب الذكي (يستهدف ملف anogs)
 void on_image_added(const struct mach_header *mh, intptr_t slide) {
     for (uint32_t i = 0; i < _dyld_image_count(); i++) {
         if (_dyld_get_image_header(i) == mh) {
             const char *name = _dyld_get_image_name(i);
+            // استهداف ملف anogs بدقة
             if (name && strstr(name, "anogs")) {
                 StartPowerEngine(slide);
             }
@@ -181,6 +187,7 @@ void on_image_added(const struct mach_header *mh, intptr_t slide) {
     }
 }
 
+// 7. البداية
 __attribute__((constructor))
 static void init() {
     _dyld_register_func_for_add_image(on_image_added);
