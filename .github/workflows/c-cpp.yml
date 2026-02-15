@@ -1,63 +1,61 @@
-name: Build Anogs Patcher Final V5
+name: Build Anogs Patcher Final V4
 
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch:
+  workflow_dispatch: # يسمح بتشغيل البناء يدوياً
 
 jobs:
   build:
-    name: Build iOS Tweak
+    name: Build iOS Dylib
     runs-on: macos-latest
 
     steps:
-      # 1. سحب الكود
+      # 1. سحب الكود من المستودع
       - name: Checkout Source Code
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      # 2. إعداد Theos (يدوياً لتجنب مشاكل API)
+      # 2. إعداد بيئة Theos يدوياً لضمان الاستقرار
       - name: Setup Theos
         run: |
           git clone --recursive https://github.com/theos/theos.git $HOME/theos
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
 
-      # 3. تثبيت أداة التوقيع ldid (هذا هو الحل للمشكلة الحالية)
+      # 3. تثبيت أداة التوقيع ldid (ضرورية لعمل الدايلب بدون كراش)
       - name: Install ldid
         run: |
           brew install ldid
           echo "ldid installed successfully."
 
-      # 4. تحميل SDKs
+      # 4. تحميل iOS SDKs مع تنظيف المجلد مسبقاً لمنع خطأ 128
       - name: Download iOS SDK
         run: |
           rm -rf $HOME/theos/sdks
           git clone --quiet --depth=1 https://github.com/theos/sdks.git $HOME/theos/sdks
+          echo "SDKs Downloaded."
 
-      # 5. التحقق من مكتبة Dobby
-      - name: Verify Dobby Library
+      # 5. التحقق من وجود جميع الملفات المطلوبة قبل البدء
+      - name: Verify Project Files
         run: |
-          if [ ! -f ./libdobby.a ]; then
-            echo "❌ Error: 'libdobby.a' is missing! Upload it to your repo."
-            exit 1
-          fi
-          if [ ! -f ./dobby.h ]; then
-            echo "❌ Error: 'dobby.h' is missing!"
-            exit 1
-          fi
+          if [ ! -f ./libdobby.a ]; then echo "❌ libdobby.a missing!"; exit 1; fi
+          if [ ! -f ./dobby.h ]; then echo "❌ dobby.h missing!"; exit 1; fi
+          if [ ! -f ./Makefile ]; then echo "❌ Makefile missing!"; exit 1; fi
+          if [ ! -f ./control ]; then echo "❌ control file missing!"; exit 1; fi
+          echo "✅ All files verified."
 
-      # 6. البناء
-      - name: Compile Tweak
+      # 6. عملية البناء النهائية (Final Build)
+      - name: Compile Dylib
         run: |
           make clean
-          make package FINALPACKAGE=1 messages=yes
+          make FINALPACKAGE=1 messages=yes
 
-      # 7. الرفع
-      - name: Upload Dylib
+      # 7. رفع ملف الـ .dylib الناتج كـ Artifact (مسار مرن)
+      - name: Upload Dylib Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Anogs_Patcher_Dylib
-          path: .theos/obj/debug/*.dylib
+          name: PUBG_Anogs_Patcher
+          # هذا المسار يبحث بشكل متداخل لضمان العثور على الملف
+          path: .theos/obj/**/*.dylib
           if-no-files-found: error
-          compression-level: 0
