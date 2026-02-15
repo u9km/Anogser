@@ -5,14 +5,14 @@
 #include <unistd.h> 
 #include "dobby.h"
 
-// 1. تعريف قيم الأوامر (ARM64)
+// 1. تعريف قيم الأوامر
 const uint32_t NOP_HEX = 0xD503201F; 
 const uint32_t RET_HEX = 0xD65F03C0; 
 
-// قفل أمان لمنع تكرار الحقن (تكرار الحقن يسبب كراش فوري)
+// منع الحقن المزدوج
 static bool is_already_patched = false;
 
-[span_0](start_span)// 2. مصفوفة NOP (منظفة بالكامل من أي علامات خارجية) [cite: 1-16]
+// 2. مصفوفة NOP (كاملة ونظيفة 100%)
 uintptr_t nop_offsets[] = {
     0x00004380, 0x00104D2C, 0x00104DBC, 0x00104DC8, 0x00104DD4, 0x00104E9C, 0x001050F8, 0x0010AEF0, 
     0x0010AF0C, 0x0010AF18, 0x0010B438, 0x0010B448, 0x0010C3B4, 0x0010C6A0, 0x0010DB68, 0x0010DE50, 
@@ -115,12 +115,12 @@ uintptr_t nop_offsets[] = {
     0x00233AC8, 0x00235FF4, 0x00236330, 0x00239184, 0x002393B0, 0x00239414
 };
 
-[cite_start]// 3. مصفوفة RET (عالية الخطورة)[span_0](end_span)
+// 3. مصفوفة RET (عالية الخطورة)
 uintptr_t ret_offsets[] = {
     0x000CC0FC, 0x000D22EC, 0x000ECE88
 };
 
-// 4. نظام عرض التنبيه الآمن (Safe UI)
+// 4. نظام عرض التنبيه الآمن
 void ShowSuccessAlert() {
     dispatch_async(dispatch_get_main_queue(), ^{
         UIWindow *window = [UIApplication sharedApplication].keyWindow;
@@ -129,9 +129,9 @@ void ShowSuccessAlert() {
             while (top.presentedViewController) top = top.presentedViewController;
             
             UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Power Hook" 
-                                                                           message:@"Injection Complete! ✅\nAll 705 Offsets Applied." 
+                                                                           message:@"Anogs Bypass: Success ✅\nAll 705 offsets applied." 
                                                                     preferredStyle:UIAlertControllerStyleAlert];
-            [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+            [alert addAction:[UIAlertAction actionWithTitle:@"Enjoy" style:UIAlertActionStyleDefault handler:nil]];
             [top presentViewController:alert animated:YES completion:nil];
         } else {
             // المحاولة مجدداً بعد ثانية إذا لم تكن الواجهة جاهزة
@@ -142,40 +142,34 @@ void ShowSuccessAlert() {
     });
 }
 
-// 5. محرك الحقن القوي (Power Injection Engine)
+// 5. محرك الحقن المتدرج (المحصن ضد الكراش)
 void PowerPatchEngine(intptr_t slide) {
-    // قفل الأمان لمنع تكرار الحقن
     if (is_already_patched) return;
     is_already_patched = true;
 
     size_t nop_count = sizeof(nop_offsets) / sizeof(nop_offsets[0]);
     size_t ret_count = sizeof(ret_offsets) / sizeof(ret_offsets[0]);
 
-    // تشغيل في خيط خلفي ذو أولوية عالية لمنع تجميد المعالج (SIGKILL)
+    // تشغيل في خيط خلفي ذو أولوية عالية لمنع تجميد المعالج
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
         
-        // الحقن المتدرج (50 أوفست كل ثانيتين كما طلبت)
+        // حقن NOP: 50 أوفست كل ثانيتين
         for (size_t i = 0; i < nop_count; i++) {
             void* addr = (void*)(slide + nop_offsets[i]);
-            if (addr) {
-                DobbyCodePatch(addr, (uint8_t *)&NOP_HEX, 4);
-            }
+            if (addr) DobbyCodePatch(addr, (uint8_t *)&NOP_HEX, 4);
             
-            // الفاصل الزمني للتدرج
             if ((i + 1) % 50 == 0) {
                 sleep(2); 
             }
         }
 
-        // حقن أوفستات RET الحساسة
+        // حقن RET
         for (size_t i = 0; i < ret_count; i++) {
             void* addr = (void*)(slide + ret_offsets[i]);
-            if (addr) {
-                DobbyCodePatch(addr, (uint8_t *)&RET_HEX, 4);
-            }
+            if (addr) DobbyCodePatch(addr, (uint8_t *)&RET_HEX, 4);
         }
 
-        // إظهار رسالة النجاح عند اكتمال الحقن الصحيح
+        // إظهار رسالة النجاح
         ShowSuccessAlert();
     });
 }
