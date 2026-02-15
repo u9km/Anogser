@@ -1,0 +1,9 @@
+Package: com.user.pubgpatcher
+Name: PUBG_Patcher
+Depends: 
+Architecture: iphoneos-arm
+Description: Anogs Patcher for PUBG Non-Jailbreak
+Maintainer: User
+Author: User
+Section: Tweaks
+Version: 1.0.0
