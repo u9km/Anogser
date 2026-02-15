@@ -1,28 +1,14 @@
-//
-//  Tweak.mm
-//  PUBG_Anogs_Master_Patcher
-//
-//  Method: Library Observer (Stable & No Crash)
-//  Target: anogs (Framework)
-//  Offsets: 672 Total
-//
-
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #include <mach-o/dyld.h>
 #include <string.h>
 #include "dobby.h"
 
-// ==========================================
-// 1. تعريف تعليمة NOP (ARM64)
-// ==========================================
+// تعليمة NOP لـ ARM64
 const uint32_t NOP_INSTRUCTION = 0xD503201F;
 
-// ==========================================
-// 2. مصفوفة الأوفستات الكاملة (672 أوفست)
-// ==========================================
+// مصفوفة الأوفستات (672 أوفست)
 uintptr_t offsets_list[] = {
-    // --- مجموعة 1 ---
     0x0009AD18, 0x000AD7D0, 0x000ADB50, 0x000D1478, 0x000D511C, 0x000E2618, 0x000E8AE8,
     0x001029B0, 0x001029C8, 0x00104B10, 0x00104D2C, 0x00104DBC, 0x00104DC8, 0x00104DD4,
     0x00104E9C, 0x001050F8, 0x0010ADC8, 0x0010AEF0, 0x0010AF0C, 0x0010AF18, 0x0010B438,
@@ -44,8 +30,6 @@ uintptr_t offsets_list[] = {
     0x0012774C, 0x00127828, 0x0012827C, 0x00128500, 0x00128524, 0x00128598, 0x001285E0,
     0x00128754, 0x001287BC, 0x001288B0, 0x00128A40, 0x00128AA8, 0x00128BDC, 0x00128C44,
     0x001296EC, 0x00129724, 0x00129A70, 0x00129B9C, 0x00129BF8, 0x00129FAC, 0x0012A1E8,
-
-    // --- مجموعة 2 ---
     0x001370A4, 0x001371F0, 0x001372AC, 0x001373F8, 0x0013763C, 0x001376A0, 0x0013772C,
     0x001377CC, 0x001378D0, 0x00137AA0, 0x00137B1C, 0x00137DF0, 0x001382B4, 0x0013849C,
     0x001385FC, 0x001386E8, 0x001388B8, 0x001388D4, 0x001388F8, 0x001389C8, 0x00138A3C,
@@ -124,25 +108,20 @@ uintptr_t offsets_list[] = {
 };
 
 // ==========================================
-// 3. دالة الحقن الأساسية
+// 3. تطبيق الباتش
 // ==========================================
 void ExecutePatch(intptr_t slide) {
-    @try {
-        size_t count = sizeof(offsets_list) / sizeof(offsets_list[0]);
-        for (size_t i = 0; i < count; i++) {
-            void* target_addr = (void*)(slide + offsets_list[i]);
-            // استخدام Dobby لكتابة NOP في العنوان
-            DobbyCodePatch(target_addr, (uint8_t *)&NOP_INSTRUCTION, sizeof(NOP_INSTRUCTION));
-        }
-    } @catch (NSException *e) {
-        // تجاهل أي استثناءات لمنع الكراش
+    size_t count = sizeof(offsets_list) / sizeof(offsets_list[0]);
+    for (size_t i = 0; i < count; i++) {
+        void* target_addr = (void*)(slide + offsets_list[i]);
+        DobbyCodePatch(target_addr, (uint8_t *)&NOP_INSTRUCTION, sizeof(NOP_INSTRUCTION));
     }
 }
 
 // ==========================================
-// 4. دالة عرض التنبيه (Safe UI)
+// 4. عرض التنبيه
 // ==========================================
-void NotifyUser() {
+void ShowSuccessAlert() {
     dispatch_async(dispatch_get_main_queue(), ^{
         UIWindow *window = nil;
         if (@available(iOS 13.0, *)) {
@@ -164,39 +143,37 @@ void NotifyUser() {
         UIViewController *top = window.rootViewController;
         while (top.presentedViewController) top = top.presentedViewController;
 
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Protection Bypass" 
-                                                                       message:@"Status: Active ✅\n672 Offsets applied to anogs." 
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"System Bypass" 
+                                                                       message:@"Anogs module patched successfully!\n672 Offsets Active." 
                                                                 preferredStyle:UIAlertControllerStyleAlert];
-        [alert addAction:[UIAlertAction actionWithTitle:@"Enjoy" style:UIAlertActionStyleDefault handler:nil]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
         [top presentViewController:alert animated:YES completion:nil];
     });
 }
 
 // ==========================================
-// 5. مراقب المكتبات (The Secret to No-Crash)
+// 5. المراقب الذكي (Fixed)
 // ==========================================
 void on_image_added(const struct mach_header *mh, intptr_t slide) {
-    // الحصول على اسم الصورة المحملة حالياً في الذاكرة
-    const char *image_path = _dyld_get_image_name_until(mh);
-    
-    // فحص إذا كان اسم الملف هو "anogs"
-    if (image_path && strstr(image_path, "anogs")) {
-        // تم التحميل! نقوم بالحقن فوراً وبأمان
-        ExecutePatch(slide);
-        
-        // إظهار التنبيه بعد 5 ثوانٍ لضمان استقرار شاشة اللعبة
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-            NotifyUser();
-        });
+    // نمر على كل المكتبات المحملة لنجد المسار الخاص بالهيدر الحالي
+    for (uint32_t i = 0; i < _dyld_image_count(); i++) {
+        if (_dyld_get_image_header(i) == mh) {
+            const char *name = _dyld_get_image_name(i);
+            if (name && strstr(name, "anogs")) {
+                ExecutePatch(slide);
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+                    ShowSuccessAlert();
+                });
+            }
+            break;
+        }
     }
 }
 
 // ==========================================
-// 6. نقطة الانطلاق (Constructor)
+// 6. نقطة البداية
 // ==========================================
 __attribute__((constructor))
-static void initialize() {
-    // تسجيل الدالة المراقبة في النظام
-    // هذه الدالة ستعمل "تلقائياً" فور تحميل أي مكتبة
+static void init() {
     _dyld_register_func_for_add_image(on_image_added);
 }
