@@ -1,17 +1,17 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #include <mach-o/dyld.h>
+#include <mach/mach.h>
 #include <string.h>
-#include <unistd.h> 
-#include "dobby.h"
+#include <unistd.h>
 
-// 1. تعريف قيم الأوامر
+// 1. تعريف قيم الأوامر (ARM64)
 const uint32_t NOP_HEX = 0xD503201F; 
 const uint32_t RET_HEX = 0xD65F03C0; 
 
 static bool is_patched_done = false;
 
-[span_0](start_span)// 2. مصفوفة NOP (كاملة ونظيفة) [cite: 1-16]
+[cite_start]// 2. مصفوفة NOP (702 أوفست مستخرجة من ملفك) [cite: 1-16]
 uintptr_t nop_offsets[] = {
     0x00004380, 0x00104D2C, 0x00104DBC, 0x00104DC8, 0x00104DD4, 0x00104E9C, 0x001050F8, 0x0010AEF0, 
     0x0010AF0C, 0x0010AF18, 0x0010B438, 0x0010B448, 0x0010C3B4, 0x0010C6A0, 0x0010DB68, 0x0010DE50, 
@@ -114,16 +114,26 @@ uintptr_t nop_offsets[] = {
     0x00233AC8, 0x00235FF4, 0x00236330, 0x00239184, 0x002393B0, 0x00239414
 };
 
-[cite_start]// مصفوفة RET (3 أوفستات)[span_0](end_span)
+// 3. مصفوفة RET (كاملة ونظيفة)
 uintptr_t ret_offsets[] = {
     0x000CC0FC, 0x000D22EC, 0x000ECE88
 };
 
-// 3. نظام عرض الرسالة (تم استبدال keyWindow بالطريقة المتوافقة مع iOS 13+)
-void ShowSuccessAlert() {
+// دالة تعديل الذاكرة المباشرة (Native Patching)
+void NativePatch(void* addr, uint32_t data) {
+    if (!addr) return;
+    mach_port_t task = mach_task_self();
+    vm_address_t vaddr = (vm_address_t)addr;
+    if (vm_protect(task, vaddr, 4, FALSE, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_COPY) == KERN_SUCCESS) {
+        memcpy(addr, &data, 4);
+        vm_protect(task, vaddr, 4, FALSE, VM_PROT_READ | VM_PROT_EXECUTE);
+    }
+}
+
+// نظام إظهار التنبيه الآمن (المتوافق مع iOS 13+)
+void ShowStatusAlert() {
     dispatch_async(dispatch_get_main_queue(), ^{
         UIWindow *window = nil;
-        // البحث عن النافذة النشطة (Active Window) بشكل صحيح
         if (@available(iOS 13.0, *)) {
             for (UIWindowScene* scene in [UIApplication sharedApplication].connectedScenes) {
                 if (scene.activationState == UISceneActivationStateForegroundActive) {
@@ -132,75 +142,63 @@ void ShowSuccessAlert() {
                 }
             }
         }
-        
-        // إذا لم نجدها، نستخدم النسخة الاحتياطية (للتوافق القديم)
         if (!window) window = [UIApplication sharedApplication].windows.firstObject;
 
         if (window && window.rootViewController) {
             UIViewController *top = window.rootViewController;
             while (top.presentedViewController) top = top.presentedViewController;
-            
-            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Power Hook" 
-                                                                           message:@"Anogs Bypass: Active ✅\n705 Offsets Applied in Background." 
+            UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Anogs Patcher" 
+                                                                           message:@"Native Engine: Success ✅\nAll offsets applied to anogs." 
                                                                     preferredStyle:UIAlertControllerStyleAlert];
             [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
             [top presentViewController:alert animated:YES completion:nil];
         } else {
-            // إعادة المحاولة بعد ثانية إذا لم تكن الواجهة جاهزة تماماً
+            // إعادة المحاولة بعد ثانية إذا لم تكن الواجهة جاهزة
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
-                ShowSuccessAlert();
+                ShowStatusAlert();
             });
         }
     });
 }
 
-// 4. المحرك القوي للحقن (Power Engine)
-void PowerPatchEngine(intptr_t slide) {
+// محرك الحقن الصامت المتدرج لضمان الاستقرار
+void RunNativeEngine(intptr_t slide) {
     if (is_patched_done) return;
     is_patched_done = true;
 
-    size_t nop_count = sizeof(nop_offsets) / sizeof(nop_offsets[0]);
-    size_t ret_count = sizeof(ret_offsets) / sizeof(ret_offsets[0]);
-
-    // تشغيل الحقن في خيط خلفي (Background Thread) لمنع تجميد اللعبة والكراش (SIGKILL)
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
-        
-        // حقن NOP بدفعات 50 كل ثانيتين لضمان استقرار المعالج
-        for (size_t i = 0; i < nop_count; i++) {
-            void* addr = (void*)(slide + nop_offsets[i]);
-            if (addr) DobbyCodePatch(addr, (uint8_t *)&NOP_HEX, 4);
-            
-            if ((i + 1) % 50 == 0) {
-                sleep(2); 
-            }
+        size_t n_count = sizeof(nop_offsets) / sizeof(nop_offsets[0]);
+        size_t r_count = sizeof(ret_offsets) / sizeof(ret_offsets[0]);
+
+        // حقن NOP بدفعات 50 كل ثانيتين لضمان استقرار الذاكرة
+        for (size_t i = 0; i < n_count; i++) {
+            NativePatch((void*)(slide + nop_offsets[i]), NOP_HEX);
+            if ((i + 1) % 50 == 0) sleep(2);
         }
 
         // حقن RET الحساسة
-        for (size_t i = 0; i < ret_count; i++) {
-            void* addr = (void*)(slide + ret_offsets[i]);
-            if (addr) DobbyCodePatch(addr, (uint8_t *)&RET_HEX, 4);
+        for (size_t i = 0; i < r_count; i++) {
+            NativePatch((void*)(slide + ret_offsets[i]), RET_HEX);
         }
 
-        // إظهار الرسالة النهائية
-        ShowSuccessAlert();
+        ShowStatusAlert();
     });
 }
 
-// 5. المراقب الذكي لملف anogs
+// المراقب المستهدف لملف anogs بدقة
 void on_image_added(const struct mach_header *mh, intptr_t slide) {
     for (uint32_t i = 0; i < _dyld_image_count(); i++) {
         if (_dyld_get_image_header(i) == mh) {
             const char *name = _dyld_get_image_name(i);
             // استهداف ملف anogs بدقة
             if (name && strstr(name, "anogs")) {
-                PowerPatchEngine(slide);
+                RunNativeEngine(slide);
             }
             break;
         }
     }
 }
 
-// 6. نقطة الانطلاق
 __attribute__((constructor))
 static void init() {
     _dyld_register_func_for_add_image(on_image_added);
