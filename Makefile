@@ -1,20 +1,24 @@
+# إعدادات المعمارية والسيرفر
 TARGET := iphone:clang:latest:14.0
 ARCHS = arm64
 
+# استدعاء ملفات Theos الأساسية
 include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME = PUBG_Patcher
 
-# ملف الكود الخاص بك
+# ملف الكود الخاص بك (Objective-C++)
 PUBG_Patcher_FILES = Tweak.mm
 
-# إعدادات الكومبايلر (تفعيل ARC وتجاهل تحذيرات معينة)
-PUBG_Patcher_CFLAGS = -fobjc-arc -Wno-deprecated-declarations
+# إعدادات الكومبايلر (C++17 + ARC)
+PUBG_Patcher_CFLAGS = -fobjc-arc -std=c++17 -Wno-unused-variable -Wno-unused-function
 
-# إضافة مكتبات الواجهة (مهمة لرسالة التنبيه)
+# المكتبات المطلوبة للواجهة
 PUBG_Patcher_FRAMEWORKS = UIKit Foundation
 
-# ربط مكتبة Dobby (تأكد أن libdobby.a موجود بجانب الـ Makefile)
+# أمر مهم جداً: ربط مكتبة Dobby الموجودة بجانب الملف
+# -L. تعني ابحث في المجلد الحالي
+# -ldobby تعني اربط ملف libdobby.a
 PUBG_Patcher_LDFLAGS = -L. -ldobby
 
 include $(THEOS_MAKE_PATH)/tweak.mk
