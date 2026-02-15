@@ -1,9 +1,9 @@
 //
 //  Tweak.mm
-//  PUBG_Anogs_Patcher
+//  PUBG_Anogs_Patcher_Final
 //
-//  Target File: anogs (Framework)
-//  Total Offsets: 672
+//  Target: anogs (Framework)
+//  Fixes: iOS 13+ UI, Dobby Headers
 //
 
 #import <Foundation/Foundation.h>
@@ -12,14 +12,14 @@
 #include <string.h>
 #include "dobby.h"
 
-// =====================================================
-// 1. تعليمة NOP (No Operation) - ARM64
-// =====================================================
+// ---------------------------------------------------------
+// 1. تعليمة NOP (ARM64)
+// ---------------------------------------------------------
 const uint32_t NOP_INSTRUCTION = 0xD503201F;
 
-// =====================================================
-// 2. القائمة الكاملة للأوفستات (672 أوفست)
-// =====================================================
+// ---------------------------------------------------------
+// 2. قائمة الأوفستات الكاملة (672 أوفست)
+// ---------------------------------------------------------
 uintptr_t offsets_list[] = {
     // Source 1
     0x0009AD18, 0x000AD7D0, 0x000ADB50,
@@ -397,30 +397,59 @@ uintptr_t offsets_list[] = {
     0x00239414, 0x00239B08
 };
 
-// =====================================================
-// 3. دالة البحث عن عنوان ملف "anogs"
-// =====================================================
+// ---------------------------------------------------------
+// 3. دالة البحث عن anogs (حروف صغيرة)
+// ---------------------------------------------------------
 intptr_t GetAnogsSlide() {
     uint32_t count = _dyld_image_count();
     for (uint32_t i = 0; i < count; i++) {
         const char *name = _dyld_get_image_name(i);
-        // البحث الدقيق عن "anogs" (حروف صغيرة)
+        // البحث عن anogs بالحروف الصغيرة
         if (name && strstr(name, "anogs")) {
             return _dyld_get_image_vmaddr_slide(i);
         }
     }
-    return 0; // لم يتم العثور على الملف
+    return 0;
 }
 
-// =====================================================
-// 4. دالة عرض الإشعار الاحترافي
-// =====================================================
+// ---------------------------------------------------------
+// 4. دالة الإشعار الحديثة (iOS 13+ Fixed)
+// ---------------------------------------------------------
 void ShowAlert(NSString *title, NSString *message) {
     dispatch_async(dispatch_get_main_queue(), ^{
-        UIViewController *topController = [UIApplication sharedApplication].keyWindow.rootViewController;
+        
+        UIWindow *window = nil;
+        
+        // دعم iOS 13+ (Scenes)
+        if (@available(iOS 13.0, *)) {
+            for (UIWindowScene *scene in [UIApplication sharedApplication].connectedScenes) {
+                if (scene.activationState == UISceneActivationStateForegroundActive) {
+                    for (UIWindow *w in scene.windows) {
+                        if (w.isKeyWindow) {
+                            window = w;
+                            break;
+                        }
+                    }
+                }
+                if (window) break;
+            }
+        }
+        
+        // دعم iOS القديم مع إخفاء التحذير
+        if (!window) {
+            #pragma clang diagnostic push
+            #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            window = [UIApplication sharedApplication].keyWindow;
+            #pragma clang diagnostic pop
+        }
+
+        if (!window) return;
+
+        UIViewController *topController = window.rootViewController;
         while (topController.presentedViewController) {
             topController = topController.presentedViewController;
         }
+
         if (!topController) return;
 
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
@@ -436,18 +465,16 @@ void ShowAlert(NSString *title, NSString *message) {
     });
 }
 
-// =====================================================
-// 5. منطق التطبيق والحقن
-// =====================================================
+// ---------------------------------------------------------
+// 5. منطق الحقن
+// ---------------------------------------------------------
 void ApplyPatches() {
-    // الانتظار 10 ثواني لضمان تحميل مكتبة anogs بالكامل
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         
-        // 1. العثور على عنوان الذاكرة الخاص بـ anogs
         intptr_t slide = GetAnogsSlide();
         
         if (slide == 0) {
-            ShowAlert(@"❌ Error", @"The file 'anogs' was not found in memory!");
+            ShowAlert(@"❌ Error", @"Module 'anogs' not found!");
             return;
         }
         
@@ -455,30 +482,21 @@ void ApplyPatches() {
             size_t count = sizeof(offsets_list) / sizeof(offsets_list[0]);
             int success_counter = 0;
 
-            // 2. تطبيق الباتش
             for (size_t i = 0; i < count; i++) {
-                // دمج العنوان الأساسي لـ anogs مع الأوفست
                 void* target_addr = (void*)(slide + offsets_list[i]);
-                
-                // كتابة NOP
                 DobbyCodePatch(target_addr, (uint8_t *)&NOP_INSTRUCTION, sizeof(NOP_INSTRUCTION));
-                
                 success_counter++;
             }
 
-            // 3. رسالة النجاح
-            NSString *msg = [NSString stringWithFormat:@"Target File: anogs\nOffsets Patched: %d/672\nStatus: Secure ✅", success_counter];
-            ShowAlert(@"💉 Injection Successful", msg);
+            NSString *msg = [NSString stringWithFormat:@"Patched %d/672 offsets in 'anogs'.", success_counter];
+            ShowAlert(@"✅ Success", msg);
             
         } @catch (NSException *exception) {
-            ShowAlert(@"❌ Injection Failed", exception.reason);
+            ShowAlert(@"❌ Crash", exception.reason);
         }
     });
 }
 
-// =====================================================
-// 6. نقطة البداية
-// =====================================================
 __attribute__((constructor))
 void init() {
     ApplyPatches();
