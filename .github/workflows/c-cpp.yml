@@ -1,4 +1,4 @@
-name: Build Anogs Patcher Final Fix
+name: Build Anogs Patcher Final V5
 
 on:
   push:
@@ -17,20 +17,25 @@ jobs:
         with:
           submodules: recursive
 
-      # 2. إعداد Theos (بدون سكربت التثبيت لتجنب مشاكل API)
+      # 2. إعداد Theos (يدوياً لتجنب مشاكل API)
       - name: Setup Theos
         run: |
           git clone --recursive https://github.com/theos/theos.git $HOME/theos
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
 
-      # 3. تحميل SDKs (مع حذف المجلد القديم أولاً لحل مشكلة exit code 128)
+      # 3. تثبيت أداة التوقيع ldid (هذا هو الحل للمشكلة الحالية)
+      - name: Install ldid
+        run: |
+          brew install ldid
+          echo "ldid installed successfully."
+
+      # 4. تحميل SDKs
       - name: Download iOS SDK
         run: |
           rm -rf $HOME/theos/sdks
           git clone --quiet --depth=1 https://github.com/theos/sdks.git $HOME/theos/sdks
-          echo "SDKs Downloaded Successfully."
 
-      # 4. التحقق من ملفات Dobby (تأكد أنك رفعت libdobby.a و dobby.h)
+      # 5. التحقق من مكتبة Dobby
       - name: Verify Dobby Library
         run: |
           if [ ! -f ./libdobby.a ]; then
@@ -42,13 +47,13 @@ jobs:
             exit 1
           fi
 
-      # 5. البناء
+      # 6. البناء
       - name: Compile Tweak
         run: |
           make clean
           make package FINALPACKAGE=1 messages=yes
 
-      # 6. الرفع
+      # 7. الرفع
       - name: Upload Dylib
         uses: actions/upload-artifact@v4
         with:
