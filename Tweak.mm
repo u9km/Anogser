@@ -11,7 +11,7 @@ const uint32_t RET_HEX = 0xD65F03C0;
 
 static bool is_patched_done = false;
 
-[cite_start]// 2. مصفوفة NOP (702 أوفست مستخرجة من ملفك) [cite: 1-16]
+// 2. مصفوفة NOP (إجمالي 702 أوفست مستخرجة بدقة)
 uintptr_t nop_offsets[] = {
     0x00004380, 0x00104D2C, 0x00104DBC, 0x00104DC8, 0x00104DD4, 0x00104E9C, 0x001050F8, 0x0010AEF0, 
     0x0010AF0C, 0x0010AF18, 0x0010B438, 0x0010B448, 0x0010C3B4, 0x0010C6A0, 0x0010DB68, 0x0010DE50, 
@@ -114,12 +114,12 @@ uintptr_t nop_offsets[] = {
     0x00233AC8, 0x00235FF4, 0x00236330, 0x00239184, 0x002393B0, 0x00239414
 };
 
-// 3. مصفوفة RET (كاملة ونظيفة)
+// 3. مصفوفة RET (3 أوفستات نظيفة تماماً)
 uintptr_t ret_offsets[] = {
     0x000CC0FC, 0x000D22EC, 0x000ECE88
 };
 
-// دالة تعديل الذاكرة المباشرة (Native Patching)
+// 4. دالة تعديل الذاكرة المباشرة (Native vm_protect)
 void NativePatch(void* addr, uint32_t data) {
     if (!addr) return;
     mach_port_t task = mach_task_self();
@@ -130,7 +130,7 @@ void NativePatch(void* addr, uint32_t data) {
     }
 }
 
-// نظام إظهار التنبيه الآمن (المتوافق مع iOS 13+)
+// 5. نظام عرض التنبيه الآمن (متوافق مع iOS 13+ وبدون أخطاء deprecated)
 void ShowStatusAlert() {
     dispatch_async(dispatch_get_main_queue(), ^{
         UIWindow *window = nil;
@@ -153,7 +153,6 @@ void ShowStatusAlert() {
             [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
             [top presentViewController:alert animated:YES completion:nil];
         } else {
-            // إعادة المحاولة بعد ثانية إذا لم تكن الواجهة جاهزة
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
                 ShowStatusAlert();
             });
@@ -161,7 +160,7 @@ void ShowStatusAlert() {
     });
 }
 
-// محرك الحقن الصامت المتدرج لضمان الاستقرار
+// 6. محرك الحقن المتدرج
 void RunNativeEngine(intptr_t slide) {
     if (is_patched_done) return;
     is_patched_done = true;
@@ -170,13 +169,11 @@ void RunNativeEngine(intptr_t slide) {
         size_t n_count = sizeof(nop_offsets) / sizeof(nop_offsets[0]);
         size_t r_count = sizeof(ret_offsets) / sizeof(ret_offsets[0]);
 
-        // حقن NOP بدفعات 50 كل ثانيتين لضمان استقرار الذاكرة
         for (size_t i = 0; i < n_count; i++) {
             NativePatch((void*)(slide + nop_offsets[i]), NOP_HEX);
             if ((i + 1) % 50 == 0) sleep(2);
         }
 
-        // حقن RET الحساسة
         for (size_t i = 0; i < r_count; i++) {
             NativePatch((void*)(slide + ret_offsets[i]), RET_HEX);
         }
@@ -185,12 +182,11 @@ void RunNativeEngine(intptr_t slide) {
     });
 }
 
-// المراقب المستهدف لملف anogs بدقة
+// 7. المراقب المستهدف لملف anogs
 void on_image_added(const struct mach_header *mh, intptr_t slide) {
     for (uint32_t i = 0; i < _dyld_image_count(); i++) {
         if (_dyld_get_image_header(i) == mh) {
             const char *name = _dyld_get_image_name(i);
-            // استهداف ملف anogs بدقة
             if (name && strstr(name, "anogs")) {
                 RunNativeEngine(slide);
             }
